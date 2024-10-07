@@ -18,37 +18,71 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+/* A new struct containing the file name, argc, and argv. */
+struct process_info
+{
+  char *file_name;
+  int argc;
+  char **argv;
+};
+
 static thread_func start_process NO_RETURN;
-static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static bool load (struct process_info *process, void (**eip) (void),
+                  void **esp);
 
 /* Starts a new thread running a user program loaded from
-   FILENAME.  The new thread may be scheduled (and may even exit)
+   COMMAND.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
-tid_t process_execute (const char *file_name)
+tid_t process_execute (const char *command)
 {
-  char *fn_copy;
+  char *cmd_copy;
   tid_t tid;
 
-  /* Make a copy of FILE_NAME.
-     Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
+  /* Make a copy of COMMAND.
+   Otherwise there's a race between the caller and load(). 
+   Also, strtok_r is modifying the string it processes, so
+   making a copy of the original command string is preferrable. */
+  cmd_copy = palloc_get_page (0);
+  if (cmd_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (cmd_copy, command, PGSIZE);
+
+  // Yiming driving
+  char *token, *save_ptr;
+  char *tokenized_cmd[128];
+  int i = 0;
+  // string tokenization
+  for (token = strtok_r (cmd_copy, " ", &save_ptr); token != NULL;
+       token = strtok_r (NULL, " ", &save_ptr))
+    {
+      // printf ("'%s'\n", token);
+      tokenized_cmd[i] = token;
+      i++;
+    }
+
+  // build the process_info struct
+  struct process_info *process = palloc_get_page (0);
+  if (process == NULL)
+    return TID_ERROR;
+
+  process->file_name = tokenized_cmd[0];
+  process->argc = i - 1;
+  process->argv = tokenized_cmd;
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (command, PRI_DEFAULT, start_process, process);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy);
+    palloc_free_page (cmd_copy);
+  
   return tid;
 }
 
 /* A thread function that loads a user process and starts it
    running. */
-static void start_process (void *file_name_)
+static void start_process (void *process_)
 {
-  char *file_name = file_name_;
+  struct process_info *process = process_;
   struct intr_frame if_;
   bool success;
 
@@ -57,10 +91,13 @@ static void start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (process, &if_.eip, &if_.esp);
+
+  // Yiming driving
+  // Freeing the process_info struct after loading the process
+  palloc_free_page (process);
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
   if (!success)
     thread_exit ();
 
@@ -70,7 +107,7 @@ static void start_process (void *file_name_)
      arguments on the stack in the form of a `struct intr_frame',
      we just point the stack pointer (%esp) to our stack frame
      and jump to it. */
-  asm volatile("movl %0, %%esp; jmp intr_exit" : : "g"(&if_) : "memory");
+  asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g"(&if_) : "memory");
   NOT_REACHED ();
 }
 
@@ -83,7 +120,13 @@ static void start_process (void *file_name_)
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int process_wait (tid_t child_tid UNUSED) { return -1; }
+int process_wait (tid_t child_tid UNUSED)
+{
+  // dummy infinite loop as a quick fix, will be implemented in problem 2-2
+  while (true)
+    ;
+  return -1;
+}
 
 /* Free the current process's resources. */
 void process_exit (void)
@@ -187,7 +230,7 @@ struct Elf32_Phdr
 #define PF_W 2 /* Writable. */
 #define PF_R 4 /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (struct process_info *process, void **esp);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -197,7 +240,8 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
-bool load (const char *file_name, void (**eip) (void), void **esp)
+bool load (struct process_info *process, void (**eip) (void),
+           void **esp)
 {
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
@@ -213,6 +257,8 @@ bool load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+  char *file_name = process->file_name;
+  // printf("file_name: %s\n", file_name);
   file = filesys_open (file_name);
   if (file == NULL)
     {
@@ -291,7 +337,7 @@ bool load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (process, esp))
     goto done;
 
   /* Start address. */
@@ -414,7 +460,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
-static bool setup_stack (void **esp)
+static bool setup_stack (struct process_info *process, void **esp)
 {
   uint8_t *kpage;
   bool success = false;
@@ -424,7 +470,67 @@ static bool setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE;
+        // Annabel and Rakesh driving
+        {
+          /* Casting of the stack pointer is necessary because the stack pointer
+             is a void pointer, and we need to decrement it with the appropriate
+             size using pointer arithmetic. */
+          *esp = PHYS_BASE;
+          // printf("stack pointer starts at: %p\n", *esp);
+
+          int argc = process->argc;
+          char **argv = process->argv;
+
+          // Declare an array of pointers to store the addresses of the arguments
+          char *arg_addrs[argc];
+
+          // Push the arguments onto the stack (order doesn't matter, but
+          // we implement it in reverse order for simplicity)
+          for (int i = argc - 1; i >= 0; i--)
+            {
+              // Cast the stack pointer to a char pointer (was void *) and 
+              // decrement it by the length of the argument
+              *esp = (char *)*esp - strlen (argv[i]) - 1;
+              arg_addrs[i] = *esp;
+              memcpy (*esp, argv[i], strlen (argv[i]) + 1);
+              // printf("arg_addrs[%d]: %p\n", i, arg_addrs[i]);
+            }
+
+          // Word align the stack pointer
+          uint8_t word_align = (uintptr_t) *esp % 4;
+          if (word_align != 0)
+            {
+              *esp = (uint8_t *)*esp - word_align;
+              memset (*esp, 0, word_align);
+            }
+
+          // Push a null pointer sentinel onto the stack
+          *esp = (char *)*esp - sizeof (char *);
+          memset (*esp, 0, sizeof (char *));
+
+          // Push the addresses of the arguments onto the stack
+          for (int i = argc - 1; i >= 0; i--)
+            {
+              *esp = (char *)*esp - sizeof (char *);
+              memcpy (*esp, &arg_addrs[i], sizeof (char *));
+            }
+
+          // Push the address of the first argument of argv onto the stack
+          char *argv_arr = *esp;
+          *esp = (char *)*esp - sizeof (char *);
+          memcpy (*esp, &argv_arr, sizeof (char *));
+
+          // Push the number of arguments, argc, onto the stack
+          *esp = (char *)*esp - sizeof (int);
+          memcpy (*esp, &argc, sizeof (int));
+
+          // Push a fake return address onto the stack
+          *esp = (char *)*esp - sizeof (void *);
+          memset (*esp, 0, sizeof (void *));
+
+          // printf("stack pointer ends at: %p\n", *esp);
+        }
+
       else
         palloc_free_page (kpage);
     }
