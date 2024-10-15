@@ -162,3 +162,32 @@ static void remove_open_file(int fd_num) {
         }
     }
 }
+
+
+// Annabel driving
+void halt(void) {
+  shutdown_power_off();
+}
+void exit(int status) {
+  struct thread *current_thread = thread_current();
+  current_thread->exit_status = status;
+  thread_exit();
+}
+
+pid_t exec(const char *cmd_line) {
+  struct thread *current_thread = thread_current();
+  tid_t return_tid = process_execute(cmd_line);
+  lock_acquire(&current_thread->lock);
+  while (current_thread->exec_status == EXEC_INIT) {
+    cond_wait(&current_thread->condition, &current_thread->lock);
+  }
+  if (current_thread->exec_status == EXEC_ERROR) {
+    return_tid = -1;
+  }
+  lock_release(&current_thread->lock);
+  return return_tid;
+}
+
+int wait(pid_t pid) {
+  return process_wait(pid);
+}

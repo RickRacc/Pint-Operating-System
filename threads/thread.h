@@ -19,6 +19,15 @@ enum thread_status
 typedef int tid_t;
 #define TID_ERROR ((tid_t) -1) /* Error value for tid_t. */
 
+#ifdef USERPROG
+#define EXIT_NORMAL 0
+#define EXIT_ERROR -1
+
+#define EXEC_INIT 0
+#define EXEC_ERROR -1
+#define EXEC_SUCCESS 1
+#endif
+
 /* Thread priorities. */
 #define PRI_MIN 0      /* Lowest priority. */
 #define PRI_DEFAULT 31 /* Default priority. */
@@ -99,6 +108,18 @@ struct thread
 #ifdef USERPROG
   /* Owned by userprog/process.c. */
   uint32_t *pagedir; /* Page directory. */
+
+  // Added members for userprog syscalls
+  struct thread *parent;
+  struct list children;
+  bool wait_called;
+  int exit_status;
+  struct Semaphore wait;
+  
+  int exec_status;
+  struct lock lock;
+  struct condition condition;
+
 #endif
 
 
@@ -141,5 +162,7 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+struct thread *get_thread(tid_t thread_id);
 
 #endif /* threads/thread.h */

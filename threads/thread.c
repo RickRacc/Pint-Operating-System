@@ -276,6 +276,7 @@ void thread_exit (void)
   intr_disable ();
   list_remove (&thread_current ()->allelem);
   thread_current ()->status = THREAD_DYING;
+  sema_up(&thread_current()->wait);
   schedule ();
   NOT_REACHED ();
 }
@@ -538,6 +539,22 @@ static tid_t allocate_tid (void)
   lock_release (&tid_lock);
 
   return tid;
+}
+
+/* Returns a pointer to the matching thread based on the given tid.
+   Returns null if no such thread exists. */
+struct thread *get_thread_from_list(tid_t thread_id) {
+  ASSERT(thread_id != TID_ERROR);
+  struct list_elem *thread_elem = list_begin(&all_list);
+  while (thread_elem != NULL) {
+    struct thread *current_thread = list_entry(thread_elem, struct thread, allelem);
+    // Make sure the target thread isn't about to be destroyed
+    if (current_thread->tid == thread_id && current_thread->status != THREAD_DYING) {
+      return current_thread;
+    }
+    thread_elem = list_next(thread_elem);
+  }
+  return NULL;
 }
 
 /* Offset of `stack' member within `struct thread'.

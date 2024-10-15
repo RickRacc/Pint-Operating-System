@@ -36,6 +36,7 @@ static bool load (struct process_info *process, void (**eip) (void),
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t process_execute (const char *command)
 {
+  
   char *cmd_copy;
   tid_t tid;
 
@@ -67,7 +68,7 @@ tid_t process_execute (const char *command)
     return TID_ERROR;
 
   process->file_name = tokenized_cmd[0];
-  process->argc = i - 1;
+  process->argc = i;
   process->argv = tokenized_cmd;
 
   /* Create a new thread to execute FILE_NAME. */
@@ -120,12 +121,27 @@ static void start_process (void *process_)
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int process_wait (tid_t child_tid UNUSED)
+int process_wait (tid_t child_tid)
 {
-  // dummy infinite loop as a quick fix, will be implemented in problem 2-2
-  while (true)
-    ;
-  return -1;
+  // Annabel driving
+  if (child_tid == TID_ERROR) {
+    return -1;
+  } else {
+    struct thread *current_thread = thread_current();
+    struct thread *child_thread = get_thread_from_list(child_tid);
+    // Cases where TID is invalid, is not a child of the current thread, has already been waited,
+    // or was killed by the kernel due to an exception
+    if (child_thread == NULL || child_thread->parent != current_thread || child_thread->wait_called || 
+        child_thread->exit_status == EXIT_ERROR) {
+      return -1;
+    }
+
+    // Wait for thread tid to die
+    sema_down(&child_thread->wait);
+    int exit_status = child_thread->exit_status;
+    child_thread->wait_called = true;
+    return exit_status;
+  }
 }
 
 /* Free the current process's resources. */
@@ -528,6 +544,7 @@ static bool setup_stack (struct process_info *process, void **esp)
           *esp = (char *)*esp - sizeof (void *);
           memset (*esp, 0, sizeof (void *));
 
+          hex_dump(*esp, *esp, (char*)PHYS_BASE - (char*)*esp, true);
           // printf("stack pointer ends at: %p\n", *esp);
         }
 
