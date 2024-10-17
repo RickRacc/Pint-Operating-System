@@ -8,22 +8,6 @@
 
 static uint32_t *active_pd (void);
 static void invalidate_pagedir (uint32_t *);
-// Yiming driving
-bool is_valid_user_pointer(const void *vaddr);
-
-/* Returns true if VADDR is a valid user virtual address.
-   1. Not a NULL pointer.
-   2. Mapped to a valid user virtual memory.
-   3. Not a pointer to the kernel virtual address space. */
-bool is_valid_user_pointer (const void *vaddr)
-{
-  if (vaddr == NULL || !is_user_vaddr (vaddr) ||
-      pagedir_get_page (active_pd (), vaddr) == NULL)
-    {
-      return false;
-    }
-  return true;
-}
 
 /* Creates a new page directory that has mappings for kernel
    virtual addresses, but none for user virtual addresses.
@@ -263,4 +247,19 @@ static void invalidate_pagedir (uint32_t *pd)
          "Translation Lookaside Buffers (TLBs)". */
       pagedir_activate (pd);
     }
+}
+
+// Yiming driving
+/* Returns true if VADDR is a valid user virtual address.
+   1. Not a NULL pointer.
+   2. Mapped to a valid user virtual memory.
+   3. Not a pointer to the kernel virtual address space. */
+bool is_valid_user_pointer (const void *vaddr)
+{
+  if (vaddr == NULL || !is_user_vaddr (vaddr) ||
+      pagedir_get_page (active_pd (), vaddr) == NULL)
+    {
+      return false;
+    }
+  return true;
 }
