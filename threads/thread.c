@@ -436,7 +436,7 @@ static void init_thread (struct thread *t, const char *name, int priority)
   t->wait_called = false;
   t->exit_status = EXIT_NORMAL;
   t->exec_status = EXEC_INIT;
-  sema_init(&t->wait, 1);
+  sema_init(&t->wait, 0);
   lock_init(&t->lock);
   cond_init(&t->condition);
 
