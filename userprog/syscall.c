@@ -1,10 +1,15 @@
-#include "userprog/syscall.h"
+#include <user/syscall.h>
 #include <stdio.h>
 #include <syscall-nr.h>
+#include "userprog/syscall.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #include "userprog/pagedir.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+
 
 struct open_file
 {
@@ -19,19 +24,15 @@ struct open_file
 static struct list open_files;
 static struct lock filesys_lock;
 
-// !!NO STDERROR?
-// SUPPOSED TO BE 2 or 3?
-static int next_fd = 2; // 0, 1, and 2 for stdin, stdout
+// fd starts at 2 because 0 and 1 are reserved for stdin and stdout
+// no stderr in pintos
+static int next_fd = 2; 
 
 static uint32_t *esp;
 
 static void syscall_handler (struct intr_frame *);
 
 static void check_stack_pointer_validity (int num_args);
-static void halt (void);
-static void exit (int status);
-static pid_t exec (const char *cmd_line);
-static int write (int fd, const void *buffer, unsigned size);
 
 // not sure why this is saying syntax_error
 static struct open_file *add_open_file (struct file *file_struct,
@@ -62,6 +63,7 @@ static void check_stack_pointer_validity (int num_args)
 // Yiming driving
 static void syscall_handler (struct intr_frame *f UNUSED)
 {
+  printf("syscall_handler\n");
   esp = f->esp;
 
   // check if stack pointer is valid and pointing to the syscall number
@@ -73,6 +75,7 @@ static void syscall_handler (struct intr_frame *f UNUSED)
   int syscall_num = *esp;
   switch (syscall_num)
     {
+      printf("syscall_num: %d\n", syscall_num);
       // add all the cases here
       case SYS_HALT:
         halt ();
@@ -94,7 +97,16 @@ static void syscall_handler (struct intr_frame *f UNUSED)
         check_stack_pointer_validity (2);
         f->eax = create (*(esp + 1), *(esp + 2));
         break;
-      
+      case SYS_REMOVE:
+        check_stack_pointer_validity (1);
+        f->eax = remove (*(esp + 1));
+        break;
+      case SYS_OPEN:
+        check_stack_pointer_validity (1);
+        f->eax = open (*(esp + 1));
+        break;
+
+        
       case SYS_WRITE:
         check_stack_pointer_validity (3);
         f->eax = write (*(esp + 1), *(esp + 2), *(esp + 3));
@@ -134,13 +146,55 @@ pid_t exec (const char *cmd_line)
 
 int wait (pid_t pid) { return process_wait (pid); }
 
-static int write (int fd, const void *buffer, unsigned size)
+// Yiming driving
+bool create (const char *file, unsigned initial_size)
 {
-  if (!is_valid_user_pointer (buffer))
-    {
-      exit (-1);
-    }
+  lock_acquire (&filesys_lock);
+  bool success = filesys_create (file, initial_size);
+  lock_release (&filesys_lock);
+  return success;
+}
 
+// Yiming driving
+bool remove (const char *file)
+{
+  lock_acquire (&filesys_lock);
+  bool success = filesys_remove (file);
+  lock_release (&filesys_lock);
+  return success;
+}
+
+// Yiming driving
+int open (const char *file)
+{
+  lock_acquire (&filesys_lock);
+
+  struct file *file_struct = filesys_open (file);
+  // If file opening fails, return -1
+  if (file_struct == NULL)
+    {
+      lock_release (&filesys_lock);
+      return -1;
+    }
+  
+  // else, add the file to the list of open files
+  struct open_file *new_open_file = add_open_file (file_struct, thread_current ());
+  if (new_open_file == NULL)
+    {
+      // if adding the file to the list fails, close the file and return -1
+      file_close (file_struct);
+      lock_release (&filesys_lock);
+      return -1;
+    }
+  
+  lock_release (&filesys_lock);
+  return new_open_file->fd_num;
+}
+
+
+
+int write (int fd, const void *buffer, unsigned size)
+{
   lock_acquire (&filesys_lock);
 
   int bytes_written = 0;
