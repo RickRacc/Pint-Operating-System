@@ -262,7 +262,7 @@ int read (int fd, void *buffer, unsigned size) {
     unsigned i;
     // read a character at a time
     for (i = 0; i < size; i++) {
-      *(uint8_t *)(buffer + i) = input_getc();
+      *((uint8_t *)buffer + i) = input_getc();
     }
     return size;  
   }
@@ -281,9 +281,9 @@ int read (int fd, void *buffer, unsigned size) {
 // RAKESH DRIVING
 int write (int fd, const void *buffer, unsigned size)
 {
-  // if (is_valid_user_pointer(buffer)) {
-  //   exit(EXIT_ERROR);
-  // }
+  if (!is_valid_user_pointer(buffer)) {
+    exit(EXIT_ERROR);
+  }
 
   lock_acquire (&filesys_lock);
 
