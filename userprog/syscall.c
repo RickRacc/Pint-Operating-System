@@ -279,6 +279,17 @@ int write (int fd, const void *buffer, unsigned size)
   return bytes_written;
 }
 
+// Annabel driving
+void seek(int fd, unsigned position) {
+  struct open_file *of = get_open_file (fd);
+  of->file_struct->pos = position;
+}
+
+unsigned tell (int fd) {
+  struct open_file *of = get_open_file (fd);
+  return of->file_struct->pos;
+}
+
 // RAKESH DRIVING
 void close (int fd) {
   lock_acquire (&filesys_lock);
