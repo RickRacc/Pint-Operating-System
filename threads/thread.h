@@ -21,7 +21,7 @@ typedef int tid_t;
 #define TID_ERROR ((tid_t) -1) /* Error value for tid_t. */
 
 #ifdef USERPROG
-#define EXIT_NORMAL 0
+#define EXIT_INIT 0
 #define EXIT_ERROR -1
 
 #define EXEC_INIT 0
@@ -113,6 +113,7 @@ struct thread
   // Added members for userprog syscalls
   struct thread *parent;
   struct list children;
+  struct list_elem childelem;
   bool wait_called;
   int exit_status;
   struct semaphore wait;

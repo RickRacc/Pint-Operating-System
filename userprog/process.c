@@ -143,6 +143,8 @@ int process_wait (tid_t child_tid)
       // printf(child_thread->wait_called ? "child_thread has already been waited\n" : "");
       // printf(child_thread->exit_status == EXIT_ERROR ? "child_thread was killed by the kernel due to an exception\n" : "");
       return -1;
+    } else if (child_thread->exit_status != EXIT_INIT) {
+      return child_thread->exit_status;
     }
 
     // Wait for thread tid to die

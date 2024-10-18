@@ -270,14 +270,18 @@ void thread_exit (void)
 #ifdef USERPROG
   process_exit ();
 #endif
-
+struct thread *current_thread = thread_current();
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
-  list_remove (&thread_current ()->allelem);
-  thread_current ()->status = THREAD_DYING;
-  sema_up (&thread_current ()->wait);
+  list_remove (&current_thread->allelem);
+  current_thread->status = THREAD_DYING;
+  sema_up (&current_thread->wait);
+  // For each of this thread's children, remove them if they haven't exited already
+  for (e = list_begin(current_thread->children); e != list_end(&current_thread->children); e = list_next(e)) {
+    
+  }
   schedule ();
   NOT_REACHED ();
 }
@@ -440,7 +444,7 @@ static void init_thread (struct thread *t, const char *name, int priority,
   sema_init (&t->wait, 0);
   lock_init (&t->lock);
   cond_init (&t->condition);
-#endif
+  list_push_back(&parent->children, &t->childelem);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
