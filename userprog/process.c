@@ -133,7 +133,7 @@ int process_wait (tid_t child_tid)
     return -1;
   } else {
     struct thread *current_thread = thread_current();
-    struct thread *child_thread = get_thread_from_list(child_tid);
+    struct thread *child_thread = get_thread_from_list(child_tid, current_thread);
     // Cases where TID is invalid, is not a child of the current thread, has already been waited,
     // or was killed by the kernel due to an exception
     if (child_thread == NULL || child_thread->parent != current_thread || child_thread->wait_called || 
