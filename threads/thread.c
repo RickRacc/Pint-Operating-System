@@ -431,6 +431,7 @@ static void init_thread (struct thread *t, const char *name, int priority,
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
+#ifdef USERPROG
   t->parent = parent;
   list_init (&t->children);
   t->wait_called = false;
@@ -439,6 +440,7 @@ static void init_thread (struct thread *t, const char *name, int priority,
   sema_init (&t->wait, 0);
   lock_init (&t->lock);
   cond_init (&t->condition);
+#endif
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

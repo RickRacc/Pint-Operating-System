@@ -92,7 +92,12 @@ static void start_process (void *process_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (process, &if_.eip, &if_.esp);
+
+  struct process_info *process_copy = palloc_get_page (0);
+  if (process_copy == NULL)
+    thread_exit ();
+  memcpy (process_copy, process, sizeof (struct process_info));
+  success = load (process_copy, &if_.eip, &if_.esp);
 
   // Yiming driving
   // Freeing the process_info struct after loading the process
@@ -142,10 +147,11 @@ int process_wait (tid_t child_tid)
 
     // Wait for thread tid to die
     printf("waiting for child thread to die\n");
+    printf("child_thread tid: %d\n", child_thread->tid);
+    child_thread->wait_called = true;
     sema_down(&child_thread->wait);
     printf("child thread has died\n");
     int exit_status = child_thread->exit_status;
-    child_thread->wait_called = true;
     printf("exit_status: %d\n", exit_status);
     return exit_status;
   }
@@ -267,6 +273,7 @@ bool load (struct process_info *process, void (**eip) (void),
            void **esp)
 {
   struct thread *t = thread_current ();
+  printf("current thread tid: %d\n", t->tid);
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
   off_t file_ofs;
@@ -278,16 +285,20 @@ bool load (struct process_info *process, void (**eip) (void),
   if (t->pagedir == NULL)
     goto done;
   process_activate ();
+  printf("argv[0] 1: %s\n", process->argv[0]);
 
   /* Open executable file. */
   char *file_name = process->file_name;
-  // printf("file_name: %s\n", file_name);
+  printf("file_name: %s\n", file_name);
+  printf("argv[0] 1.5: %s\n", process->argv[0]);
   file = filesys_open (file_name);
+  printf("argv[0] 1.75: %s\n", process->argv[0]);
   if (file == NULL)
     {
       printf ("load: %s: open failed\n", file_name);
       goto done;
     }
+  printf("argv[0] 2: %s\n", process->argv[0]);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr ||
@@ -298,6 +309,8 @@ bool load (struct process_info *process, void (**eip) (void),
       printf ("load: %s: error loading executable\n", file_name);
       goto done;
     }
+  
+  printf("argv[0] 3: %s\n", process->argv[0]);
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
