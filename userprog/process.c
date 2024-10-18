@@ -72,7 +72,7 @@ tid_t process_execute (const char *command)
   process->argv = tokenized_cmd;
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (command, PRI_DEFAULT, start_process, process);
+  tid = thread_create (process->file_name, PRI_DEFAULT, start_process, process);
   if (tid == TID_ERROR)
     palloc_free_page (cmd_copy);
   
@@ -148,13 +148,13 @@ int process_wait (tid_t child_tid)
     }
 
     // Wait for thread tid to die
-    printf("waiting for child thread to die\n");
+    // printf("waiting for child thread to die\n");
     // printf("child_thread tid: %d\n", child_thread->tid);
     child_thread->wait_called = true;
     sema_down(&child_thread->wait);
-    printf("child thread has died\n");
+    // printf("child thread has died\n");
     int exit_status = child_thread->exit_status;
-    printf("exit_status: %d\n", exit_status);
+    // printf("exit_status: %d\n", exit_status);
     return exit_status;
   }
 }
@@ -275,7 +275,7 @@ bool load (struct process_info *process, void (**eip) (void),
            void **esp)
 {
   struct thread *t = thread_current ();
-  printf("current thread tid: %d\n", t->tid);
+  // printf("current thread tid: %d\n", t->tid);
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
   off_t file_ofs;
@@ -291,10 +291,10 @@ bool load (struct process_info *process, void (**eip) (void),
 
   /* Open executable file. */
   char *file_name = process->file_name;
-  printf("file_name: %s\n", file_name);
+  // printf("file_name: %s\n", file_name);
   // printf("argv[0] 1.5: %s\n", process->argv[0]);
   file = filesys_open (file_name);
-  printf("file_name: %s\n", file_name);
+  // printf("file_name: %s\n", file_name);
   // printf("argv[0] 1.75: %s\n", process->argv[0]);
   if (file == NULL)
     {
@@ -501,7 +501,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Checks if esp is within the bounds of the stack*/
 static bool stack_in_bound(void **esp, uint8_t *kpage) {
   if (*esp < (void *)((uint8_t *)PHYS_BASE - PGSIZE)) {
-    printf("stack pointer out of bounds\n");
+    // printf("stack pointer out of bounds\n");
     palloc_free_page(kpage);
     return false;
   }
@@ -534,7 +534,7 @@ static bool setup_stack (struct process_info *process, void **esp)
           // Declare an array of pointers to store the addresses of the arguments
           char *arg_addrs[argc];
 
-          printf("argc: %d\n", argc);
+          // printf("argc: %d\n", argc);
 
           // Push the arguments onto the stack (order doesn't matter, but
           // we implement it in reverse order for simplicity)
@@ -546,11 +546,11 @@ static bool setup_stack (struct process_info *process, void **esp)
               if (!stack_in_bound(esp, kpage)) {
                 return false;
               }
-              printf("arg[%d]: %s\n", i, argv[i]);
-              printf("esp: %p\n", *esp);
+              // printf("arg[%d]: %s\n", i, argv[i]);
+              // printf("esp: %p\n", *esp);
               arg_addrs[i] = *esp;
               memcpy (*esp, argv[i], strlen (argv[i]) + 1);
-              printf("arg_addrs[%d]: %p\n", i, arg_addrs[i]);
+              // printf("arg_addrs[%d]: %p\n", i, arg_addrs[i]);
             }
 
           // Word align the stack pointer
@@ -603,7 +603,7 @@ static bool setup_stack (struct process_info *process, void **esp)
           }
           memset (*esp, 0, sizeof (void *));
 
-          hex_dump(*esp, *esp, (char*)PHYS_BASE - (char*)*esp, true);
+          // hex_dump(*esp, *esp, (char*)PHYS_BASE - (char*)*esp, true);
           // printf("stack pointer ends at: %p\n", *esp);
         }
 

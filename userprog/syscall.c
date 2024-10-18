@@ -1,6 +1,7 @@
 #include <user/syscall.h>
 #include <stdio.h>
 #include <syscall-nr.h>
+#include "userprog/process.h"
 #include "userprog/syscall.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -55,7 +56,7 @@ static void check_stack_pointer_validity (int num_args)
     {
       if (!is_valid_user_pointer (esp + i + 1))
         {
-          printf("invalid stack pointer\n");
+          // printf("invalid stack pointer\n");
           exit (EXIT_ERROR);
         }
     }
@@ -64,7 +65,7 @@ static void check_stack_pointer_validity (int num_args)
 // Yiming driving
 static void syscall_handler (struct intr_frame *f UNUSED)
 {
-  printf("syscall_handler\n");
+  // printf("syscall_handler\n");
   esp = f->esp;
 
   // check if stack pointer is valid and pointing to the syscall number
@@ -74,7 +75,7 @@ static void syscall_handler (struct intr_frame *f UNUSED)
     }
 
   int syscall_num = *esp;
-  printf("syscall_num: %d\n", syscall_num);
+  // printf("syscall_num: %d\n", syscall_num);
   switch (syscall_num)
     {
       // add all the cases here
@@ -148,6 +149,7 @@ void exit (int status)
 {
   struct thread *current_thread = thread_current ();
   current_thread->exit_status = status;
+  printf("%s: exit(%d)\n", current_thread->name, status);
   thread_exit ();
 }
 
