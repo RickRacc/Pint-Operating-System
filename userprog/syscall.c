@@ -69,6 +69,7 @@ static void syscall_handler (struct intr_frame *f UNUSED)
   // check if stack pointer is valid and pointing to the syscall number
   if (!is_valid_user_pointer (esp))
     {
+      printf("invalid user pointer\n");
       exit (EXIT_ERROR);
     }
 
@@ -133,7 +134,10 @@ void halt (void) { shutdown_power_off (); }
 
 void exit (int status)
 {
+  printf("exiting with status %d\n", status);
   struct thread *current_thread = thread_current ();
+  printf("current_thread exiting: %s\n", current_thread->name);
+  printf("current_thread exiting parent: %s\n", current_thread->parent->name);
   current_thread->exit_status = status;
   thread_exit ();
 }

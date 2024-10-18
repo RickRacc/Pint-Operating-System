@@ -51,7 +51,7 @@ tid_t process_execute (const char *command)
 
   // Yiming driving
   char *token, *save_ptr;
-  char *tokenized_cmd[128];
+  char **tokenized_cmd = palloc_get_page (0);
   int i = 0;
   // string tokenization
   for (token = strtok_r (cmd_copy, " ", &save_ptr); token != NULL;
@@ -287,20 +287,21 @@ bool load (struct process_info *process, void (**eip) (void),
   if (t->pagedir == NULL)
     goto done;
   process_activate ();
-  printf("argv[0] 1: %s\n", process->argv[0]);
+  // printf("argv[0] 1: %s\n", process->argv[0]);
 
   /* Open executable file. */
   char *file_name = process->file_name;
   printf("file_name: %s\n", file_name);
-  printf("argv[0] 1.5: %s\n", process->argv[0]);
+  // printf("argv[0] 1.5: %s\n", process->argv[0]);
   file = filesys_open (file_name);
-  printf("argv[0] 1.75: %s\n", process->argv[0]);
+  printf("file_name: %s\n", file_name);
+  // printf("argv[0] 1.75: %s\n", process->argv[0]);
   if (file == NULL)
     {
       printf ("load: %s: open failed\n", file_name);
       goto done;
     }
-  printf("argv[0] 2: %s\n", process->argv[0]);
+  // printf("argv[0] 2: %s\n", process->argv[0]);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr ||
@@ -312,7 +313,7 @@ bool load (struct process_info *process, void (**eip) (void),
       goto done;
     }
   
-  printf("argv[0] 3: %s\n", process->argv[0]);
+  // printf("argv[0] 3: %s\n", process->argv[0]);
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
@@ -500,6 +501,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Checks if esp is within the bounds of the stack*/
 static bool stack_in_bound(void **esp, uint8_t *kpage) {
   if (*esp < (void *)((uint8_t *)PHYS_BASE - PGSIZE)) {
+    printf("stack pointer out of bounds\n");
     palloc_free_page(kpage);
     return false;
   }
@@ -523,6 +525,7 @@ static bool setup_stack (struct process_info *process, void **esp)
           /* Casting of the stack pointer is necessary because the stack pointer
              is a void pointer, and we need to decrement it with the appropriate
              size using pointer arithmetic. */
+          *esp = PHYS_BASE;
           // printf("stack pointer starts at: %p\n", *esp);
 
           int argc = process->argc;
@@ -543,6 +546,8 @@ static bool setup_stack (struct process_info *process, void **esp)
               if (!stack_in_bound(esp, kpage)) {
                 return false;
               }
+              printf("arg[%d]: %s\n", i, argv[i]);
+              printf("esp: %p\n", *esp);
               arg_addrs[i] = *esp;
               memcpy (*esp, argv[i], strlen (argv[i]) + 1);
               printf("arg_addrs[%d]: %p\n", i, arg_addrs[i]);
@@ -598,7 +603,7 @@ static bool setup_stack (struct process_info *process, void **esp)
           }
           memset (*esp, 0, sizeof (void *));
 
-          // hex_dump(*esp, *esp, (char*)PHYS_BASE - (char*)*esp, true);
+          hex_dump(*esp, *esp, (char*)PHYS_BASE - (char*)*esp, true);
           // printf("stack pointer ends at: %p\n", *esp);
         }
 
