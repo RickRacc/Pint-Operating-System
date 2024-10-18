@@ -105,11 +105,11 @@ static void syscall_handler (struct intr_frame *f UNUSED)
         check_stack_pointer_validity (1);
         f->eax = open (*(esp + 1));
         break;
-
-      case SYS_CLOSE:
+      case SYS_FILESIZE:
         check_stack_pointer_validity (1);
-        close(*(esp + 1));
+        f->eax = filesize (*(esp + 1));
         break;
+      
         
 
 
@@ -117,6 +117,10 @@ static void syscall_handler (struct intr_frame *f UNUSED)
       case SYS_WRITE:
         check_stack_pointer_validity (3);
         f->eax = write (*(esp + 1), *(esp + 2), *(esp + 3));
+        break;
+      case SYS_CLOSE:
+        check_stack_pointer_validity (1);
+        close(*(esp + 1));
         break;
 
       default:
@@ -240,7 +244,7 @@ int write (int fd, const void *buffer, unsigned size)
   if (is_valid_user_pointer(buffer)) {
     exit(EXIT_ERROR);
   }
-  
+
   lock_acquire (&filesys_lock);
 
   int bytes_written = 0;

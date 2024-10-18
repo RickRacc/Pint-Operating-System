@@ -20,14 +20,14 @@ enum thread_status
 typedef int tid_t;
 #define TID_ERROR ((tid_t) -1) /* Error value for tid_t. */
 
-//#ifdef USERPROG
+#ifdef USERPROG
 #define EXIT_NORMAL 0
 #define EXIT_ERROR -1
 
 #define EXEC_INIT 0
 #define EXEC_ERROR -1
 #define EXEC_SUCCESS 1
-//#endif
+#endif
 
 /* Thread priorities. */
 #define PRI_MIN 0      /* Lowest priority. */
@@ -106,7 +106,7 @@ struct thread
   struct list_elem elem; /* List element. */
 
 
-//#ifdef USERPROG
+#ifdef USERPROG
   /* Owned by userprog/process.c. */
   uint32_t *pagedir; /* Page directory. */
 
@@ -121,7 +121,7 @@ struct thread
   struct lock lock;
   struct condition condition;
 
-//#endif
+#endif
 
 
   /* Owned by thread.c. */
