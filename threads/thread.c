@@ -278,13 +278,13 @@ void thread_exit (void)
   intr_disable ();
   list_remove (&current_thread->allelem);
   current_thread->status = THREAD_DYING;
-  sema_up (&current_thread->wait);
   // For each of this thread's children, remove them if they haven't exited already
   for (struct list_elem *e = list_begin(&current_thread->children); e != list_end(&current_thread->children); e = list_next(e)) {
     if (list_entry(e, struct thread, childelem)->status != THREAD_DYING) {
       list_remove(e);
     }
   }
+  sema_up (&current_thread->wait);
   schedule ();
   NOT_REACHED ();
 }

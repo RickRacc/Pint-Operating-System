@@ -55,6 +55,7 @@ static void check_stack_pointer_validity (int num_args)
     {
       if (!is_valid_user_pointer (esp + i + 1))
         {
+          printf("invalid stack pointer\n");
           exit (EXIT_ERROR);
         }
     }
@@ -73,9 +74,9 @@ static void syscall_handler (struct intr_frame *f UNUSED)
     }
 
   int syscall_num = *esp;
+  printf("syscall_num: %d\n", syscall_num);
   switch (syscall_num)
     {
-      printf("syscall_num: %d\n", syscall_num);
       // add all the cases here
       case SYS_HALT:
         halt ();
@@ -280,9 +281,9 @@ int read (int fd, void *buffer, unsigned size) {
 // RAKESH DRIVING
 int write (int fd, const void *buffer, unsigned size)
 {
-  if (!is_valid_user_pointer(buffer)) {
-    exit(EXIT_ERROR);
-  }
+  // if (is_valid_user_pointer(buffer)) {
+  //   exit(EXIT_ERROR);
+  // }
 
   lock_acquire (&filesys_lock);
 

@@ -149,7 +149,7 @@ int process_wait (tid_t child_tid)
 
     // Wait for thread tid to die
     printf("waiting for child thread to die\n");
-    printf("child_thread tid: %d\n", child_thread->tid);
+    // printf("child_thread tid: %d\n", child_thread->tid);
     child_thread->wait_called = true;
     sema_down(&child_thread->wait);
     printf("child thread has died\n");
