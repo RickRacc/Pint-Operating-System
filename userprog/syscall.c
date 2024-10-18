@@ -69,7 +69,6 @@ static void syscall_handler (struct intr_frame *f UNUSED)
   // check if stack pointer is valid and pointing to the syscall number
   if (!is_valid_user_pointer (esp))
     {
-      printf("invalid user pointer\n");
       exit (EXIT_ERROR);
     }
 
@@ -87,7 +86,7 @@ static void syscall_handler (struct intr_frame *f UNUSED)
         break;
       case SYS_EXEC:
         check_stack_pointer_validity (1);
-        f->eax = exec (*(esp + 1));
+        f->eax = exec ((char *) *(esp + 1));
         break;
       case SYS_WAIT:
         check_stack_pointer_validity (1);
@@ -96,29 +95,41 @@ static void syscall_handler (struct intr_frame *f UNUSED)
       // Not implemented yet
       case SYS_CREATE:
         check_stack_pointer_validity (2);
-        f->eax = create (*(esp + 1), *(esp + 2));
+        f->eax = create ((char *) *(esp + 1), *(esp + 2));
         break;
       case SYS_REMOVE:
         check_stack_pointer_validity (1);
-        f->eax = remove (*(esp + 1));
+        f->eax = remove ((char *) *(esp + 1));
         break;
       case SYS_OPEN:
         check_stack_pointer_validity (1);
-        f->eax = open (*(esp + 1));
+        f->eax = open ((char *) *(esp + 1));
         break;
       case SYS_FILESIZE:
         check_stack_pointer_validity (1);
         f->eax = filesize (*(esp + 1));
         break;
-      
-        
 
-
+      case SYS_READ:
+        check_stack_pointer_validity (3);
+        f->eax = read (*(esp + 1), (void *) *(esp + 2), *(esp + 3));
+        break;
         
       case SYS_WRITE:
         check_stack_pointer_validity (3);
-        f->eax = write (*(esp + 1), *(esp + 2), *(esp + 3));
+        f->eax = write (*(esp + 1), (void *) *(esp + 2), *(esp + 3));
         break;
+
+      case SYS_SEEK:
+        check_stack_pointer_validity (2);
+        seek (*(esp + 1), *(esp + 2));
+        break;
+
+      case SYS_TELL:
+        check_stack_pointer_validity (1);
+        f->eax = tell (*(esp + 1));
+        break;
+
       case SYS_CLOSE:
         check_stack_pointer_validity (1);
         close(*(esp + 1));
@@ -134,10 +145,7 @@ void halt (void) { shutdown_power_off (); }
 
 void exit (int status)
 {
-  printf("exiting with status %d\n", status);
   struct thread *current_thread = thread_current ();
-  printf("current_thread exiting: %s\n", current_thread->name);
-  printf("current_thread exiting parent: %s\n", current_thread->parent->name);
   current_thread->exit_status = status;
   thread_exit ();
 }
@@ -147,7 +155,7 @@ pid_t exec (const char *cmd_line)
   struct thread *current_thread;
   tid_t return_tid;
 
-  if (is_valid_user_pointer(cmd_line)) {
+  if (!is_valid_user_pointer(cmd_line)) {
     exit(EXIT_ERROR);
   }
 
@@ -172,7 +180,7 @@ int wait (pid_t pid) { return process_wait (pid); }
 bool create (const char *file, unsigned initial_size)
 {
   bool success;
-  if (is_valid_user_pointer(file)) {
+  if (!is_valid_user_pointer(file)) {
     exit(EXIT_ERROR);
   }
 
@@ -186,7 +194,7 @@ bool create (const char *file, unsigned initial_size)
 bool remove (const char *file)
 {
   bool success;
-  if (is_valid_user_pointer (file)) {
+  if (!is_valid_user_pointer (file)) {
     exit (EXEC_ERROR);
   }
   lock_acquire (&filesys_lock);
@@ -199,7 +207,7 @@ bool remove (const char *file)
 int open (const char *file)
 {
   struct file *file_struct;
-  if (is_valid_user_pointer (file)) {
+  if (!is_valid_user_pointer (file)) {
     exit (EXEC_ERROR);
   }
 
@@ -243,9 +251,36 @@ int filesize (int fd) {
 }
 
 // RAKESH DRIVING
+int read (int fd, void *buffer, unsigned size) {
+  if (!is_valid_user_pointer(buffer)) {
+    exit(EXIT_ERROR);
+  }
+
+  // read from the keyboard if standard input
+  if (fd == STDIN_FILENO) {
+    unsigned i;
+    // read a character at a time
+    for (i = 0; i < size; i++) {
+      *(uint8_t *)(buffer + i) = input_getc();
+    }
+    return size;  
+  }
+
+  int bytes_read = -1;
+  lock_acquire(&filesys_lock);
+  struct open_file *of = get_open_file(fd);
+  if (of) {
+    // read from the file
+    bytes_read = file_read(of->file_struct, buffer, size);
+  }
+  lock_release(&filesys_lock);
+  return bytes_read;
+}
+
+// RAKESH DRIVING
 int write (int fd, const void *buffer, unsigned size)
 {
-  if (is_valid_user_pointer(buffer)) {
+  if (!is_valid_user_pointer(buffer)) {
     exit(EXIT_ERROR);
   }
 
