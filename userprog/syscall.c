@@ -106,6 +106,13 @@ static void syscall_handler (struct intr_frame *f UNUSED)
         f->eax = open (*(esp + 1));
         break;
 
+      case SYS_CLOSE:
+        check_stack_pointer_validity (1);
+        close(*(esp + 1));
+        break;
+        
+
+
         
       case SYS_WRITE:
         check_stack_pointer_validity (3);
@@ -129,8 +136,15 @@ void exit (int status)
 
 pid_t exec (const char *cmd_line)
 {
-  struct thread *current_thread = thread_current ();
-  tid_t return_tid = process_execute (cmd_line);
+  struct thread *current_thread;
+  tid_t return_tid;
+
+  if (is_valid_user_pointer(cmd_line)) {
+    exit(EXIT_ERROR);
+  }
+
+  current_thread = thread_current ();
+  return_tid = process_execute (cmd_line);
   lock_acquire (&current_thread->lock);
   while (current_thread->exec_status == EXEC_INIT)
     {
@@ -149,8 +163,13 @@ int wait (pid_t pid) { return process_wait (pid); }
 // Yiming driving
 bool create (const char *file, unsigned initial_size)
 {
+  bool success;
+  if (is_valid_user_pointer(file)) {
+    exit(EXIT_ERROR);
+  }
+
   lock_acquire (&filesys_lock);
-  bool success = filesys_create (file, initial_size);
+  success = filesys_create (file, initial_size);
   lock_release (&filesys_lock);
   return success;
 }
@@ -158,8 +177,12 @@ bool create (const char *file, unsigned initial_size)
 // Yiming driving
 bool remove (const char *file)
 {
+  bool success;
+  if (is_valid_user_pointer (file)) {
+    exit (EXEC_ERROR);
+  }
   lock_acquire (&filesys_lock);
-  bool success = filesys_remove (file);
+  success = filesys_remove (file);
   lock_release (&filesys_lock);
   return success;
 }
@@ -167,9 +190,13 @@ bool remove (const char *file)
 // Yiming driving
 int open (const char *file)
 {
-  lock_acquire (&filesys_lock);
+  struct file *file_struct;
+  if (is_valid_user_pointer (file)) {
+    exit (EXEC_ERROR);
+  }
 
-  struct file *file_struct = filesys_open (file);
+  lock_acquire (&filesys_lock);
+  file_struct = filesys_open (file);
   // If file opening fails, return -1
   if (file_struct == NULL)
     {
@@ -191,10 +218,29 @@ int open (const char *file)
   return new_open_file->fd_num;
 }
 
+// RAKESH DRIVING
+int filesize (int fd) {
+  struct open_file *f;
+  int size = -1;
 
+  lock_acquire (&filesys_lock);
 
+  f = get_open_file(fd);
+  if (f != NULL) {
+    size = file_length(f->file_struct);
+  }
+
+  lock_release (&filesys_lock);
+  return size;
+}
+
+// RAKESH DRIVING
 int write (int fd, const void *buffer, unsigned size)
 {
+  if (is_valid_user_pointer(buffer)) {
+    exit(EXIT_ERROR);
+  }
+  
   lock_acquire (&filesys_lock);
 
   int bytes_written = 0;
@@ -229,6 +275,15 @@ int write (int fd, const void *buffer, unsigned size)
   return bytes_written;
 }
 
+// RAKESH DRIVING
+void close (int fd) {
+  lock_acquire (&filesys_lock);
+  remove_open_file(*(esp + 1));
+  lock_release (&filesys_lock);
+}
+
+
+// RAKESH DRIVING
 /* Adds a new file to the open files list */
 // helpful for sys_open
 static struct open_file *add_open_file (struct file *file_struct,
@@ -247,6 +302,7 @@ static struct open_file *add_open_file (struct file *file_struct,
   return new_open_file;
 }
 
+// RAKESH DRIVING
 /* Gets an open file based on its file descriptor*/
 static struct open_file *get_open_file (int fd_num)
 {
@@ -263,6 +319,7 @@ static struct open_file *get_open_file (int fd_num)
   return NULL; // Return NULL if no matching fd is found.
 }
 
+// RAKESH DRIVING
 /* Removes an open file from the list and cleans up. */
 static void remove_open_file (int fd_num)
 {

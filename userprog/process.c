@@ -474,6 +474,16 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
+// RAKESH DRIVING
+/* Checks if esp is within the bounds of the stack*/
+static bool stack_in_bound(void **esp, uint8_t *kpage) {
+  if (*esp < (void *)((uint8_t *)PHYS_BASE - PGSIZE)) {
+    palloc_free_page(kpage);
+    return false;
+  }
+  return true;
+}
+
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool setup_stack (struct process_info *process, void **esp)
@@ -507,6 +517,9 @@ static bool setup_stack (struct process_info *process, void **esp)
               // Cast the stack pointer to a char pointer (was void *) and 
               // decrement it by the length of the argument
               *esp = (char *)*esp - strlen (argv[i]) - 1;
+              if (!stack_in_bound(esp, kpage)) {
+                return false;
+              }
               arg_addrs[i] = *esp;
               memcpy (*esp, argv[i], strlen (argv[i]) + 1);
               // printf("arg_addrs[%d]: %p\n", i, arg_addrs[i]);
@@ -517,31 +530,49 @@ static bool setup_stack (struct process_info *process, void **esp)
           if (word_align != 0)
             {
               *esp = (uint8_t *)*esp - word_align;
+              if (!stack_in_bound(esp, kpage)) {
+                return false;
+              }
               memset (*esp, 0, word_align);
             }
 
           // Push a null pointer sentinel onto the stack
           *esp = (char *)*esp - sizeof (char *);
+          if (!stack_in_bound(esp, kpage)) {
+            return false;
+          }
           memset (*esp, 0, sizeof (char *));
 
           // Push the addresses of the arguments onto the stack
           for (int i = argc - 1; i >= 0; i--)
             {
               *esp = (char *)*esp - sizeof (char *);
+              if (!stack_in_bound(esp, kpage)) {
+                return false;
+              }
               memcpy (*esp, &arg_addrs[i], sizeof (char *));
             }
 
           // Push the address of the first argument of argv onto the stack
           char *argv_arr = *esp;
           *esp = (char *)*esp - sizeof (char *);
+          if (!stack_in_bound(esp, kpage)) {
+            return false;
+          }
           memcpy (*esp, &argv_arr, sizeof (char *));
 
           // Push the number of arguments, argc, onto the stack
           *esp = (char *)*esp - sizeof (int);
+          if (!stack_in_bound(esp, kpage)) {
+            return false;
+          }
           memcpy (*esp, &argc, sizeof (int));
 
           // Push a fake return address onto the stack
           *esp = (char *)*esp - sizeof (void *);
+          if (!stack_in_bound(esp, kpage)) {
+            return false;
+          }
           memset (*esp, 0, sizeof (void *));
 
           hex_dump(*esp, *esp, (char*)PHYS_BASE - (char*)*esp, true);
