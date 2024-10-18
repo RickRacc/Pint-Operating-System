@@ -64,7 +64,8 @@ static void kernel_thread (thread_func *, void *aux);
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
 static struct thread *next_thread_to_run (void);
-static void init_thread (struct thread *, const char *name, int priority);
+static void init_thread (struct thread *, const char *name, int priority,
+                         struct thread *parent);
 static bool is_thread (struct thread *) UNUSED;
 static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
@@ -94,7 +95,7 @@ void thread_init (void)
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
-  init_thread (initial_thread, "main", PRI_DEFAULT);
+  init_thread (initial_thread, "main", PRI_DEFAULT, NULL);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
 }
@@ -175,7 +176,7 @@ tid_t thread_create (const char *name, int priority, thread_func *function,
     return TID_ERROR;
 
   /* Initialize thread. */
-  init_thread (t, name, priority);
+  init_thread (t, name, priority, thread_current ());
   tid = t->tid = allocate_tid ();
 
   /* Stack frame for kernel_thread(). */
@@ -276,7 +277,7 @@ void thread_exit (void)
   intr_disable ();
   list_remove (&thread_current ()->allelem);
   thread_current ()->status = THREAD_DYING;
-  sema_up(&thread_current()->wait);
+  sema_up (&thread_current ()->wait);
   schedule ();
   NOT_REACHED ();
 }
@@ -323,9 +324,7 @@ void thread_set_priority (int new_priority)
 int thread_get_priority (void) { return thread_current ()->priority; }
 
 /* Sets the current thread's nice value to NICE. */
-void thread_set_nice (int nice UNUSED)
-{ /* Not yet implemented. */
-}
+void thread_set_nice (int nice UNUSED) { /* Not yet implemented. */ }
 
 /* Returns the current thread's nice value. */
 int thread_get_nice (void)
@@ -381,7 +380,7 @@ static void idle (void *idle_started_ UNUSED)
 
          See [IA32-v2a] "HLT", [IA32-v2b] "STI", and [IA32-v3a]
          7.11.1 "HLT Instruction". */
-      asm volatile("sti; hlt" : : : "memory");
+      asm volatile ("sti; hlt" : : : "memory");
     }
 }
 
@@ -404,7 +403,7 @@ struct thread *running_thread (void)
      down to the start of a page.  Because `struct thread' is
      always at the beginning of a page and the stack pointer is
      somewhere in the middle, this locates the curent thread. */
-  asm("mov %%esp, %0" : "=g"(esp));
+  asm ("mov %%esp, %0" : "=g"(esp));
   return pg_round_down (esp);
 }
 
@@ -416,7 +415,8 @@ static bool is_thread (struct thread *t)
 
 /* Does basic initialization of T as a blocked thread named
    NAME. */
-static void init_thread (struct thread *t, const char *name, int priority)
+static void init_thread (struct thread *t, const char *name, int priority,
+                         struct thread *parent)
 {
   enum intr_level old_level;
 
@@ -431,15 +431,14 @@ static void init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
-  t->parent = thread_current();
-  list_init(&t->children);
+  t->parent = parent;
+  list_init (&t->children);
   t->wait_called = false;
   t->exit_status = EXIT_NORMAL;
   t->exec_status = EXEC_INIT;
-  sema_init(&t->wait, 0);
-  lock_init(&t->lock);
-  cond_init(&t->condition);
-
+  sema_init (&t->wait, 0);
+  lock_init (&t->lock);
+  cond_init (&t->condition);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -553,17 +552,22 @@ static tid_t allocate_tid (void)
 
 /* Returns a pointer to the matching thread based on the given tid.
    Returns null if no such thread exists. */
-struct thread *get_thread_from_list(tid_t thread_id) {
-  ASSERT(thread_id != TID_ERROR);
-  struct list_elem *thread_elem = list_begin(&all_list);
-  while (thread_elem != NULL) {
-    struct thread *current_thread = list_entry(thread_elem, struct thread, allelem);
-    // Make sure the target thread isn't about to be destroyed
-    if (current_thread->tid == thread_id && current_thread->status != THREAD_DYING) {
-      return current_thread;
+struct thread *get_thread_from_list (tid_t thread_id)
+{
+  ASSERT (thread_id != TID_ERROR);
+  struct list_elem *thread_elem = list_begin (&all_list);
+  while (thread_elem != NULL)
+    {
+      struct thread *current_thread =
+          list_entry (thread_elem, struct thread, allelem);
+      // Make sure the target thread isn't about to be destroyed
+      if (current_thread->tid == thread_id &&
+          current_thread->status != THREAD_DYING)
+        {
+          return current_thread;
+        }
+      thread_elem = list_next (thread_elem);
     }
-    thread_elem = list_next(thread_elem);
-  }
   return NULL;
 }
 

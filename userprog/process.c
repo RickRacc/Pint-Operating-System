@@ -133,13 +133,20 @@ int process_wait (tid_t child_tid)
     // or was killed by the kernel due to an exception
     if (child_thread == NULL || child_thread->parent != current_thread || child_thread->wait_called || 
         child_thread->exit_status == EXIT_ERROR) {
+      // printf(child_thread == NULL ? "child_thread is NULL\n" : "");
+      // printf(child_thread->parent != current_thread ? "child_thread is not a child of the current thread\n" : "");
+      // printf(child_thread->wait_called ? "child_thread has already been waited\n" : "");
+      // printf(child_thread->exit_status == EXIT_ERROR ? "child_thread was killed by the kernel due to an exception\n" : "");
       return -1;
     }
 
     // Wait for thread tid to die
+    printf("waiting for child thread to die\n");
     sema_down(&child_thread->wait);
+    printf("child thread has died\n");
     int exit_status = child_thread->exit_status;
     child_thread->wait_called = true;
+    printf("exit_status: %d\n", exit_status);
     return exit_status;
   }
 }
@@ -501,7 +508,6 @@ static bool setup_stack (struct process_info *process, void **esp)
           /* Casting of the stack pointer is necessary because the stack pointer
              is a void pointer, and we need to decrement it with the appropriate
              size using pointer arithmetic. */
-          *esp = PHYS_BASE;
           // printf("stack pointer starts at: %p\n", *esp);
 
           int argc = process->argc;
@@ -509,6 +515,8 @@ static bool setup_stack (struct process_info *process, void **esp)
 
           // Declare an array of pointers to store the addresses of the arguments
           char *arg_addrs[argc];
+
+          printf("argc: %d\n", argc);
 
           // Push the arguments onto the stack (order doesn't matter, but
           // we implement it in reverse order for simplicity)
@@ -522,7 +530,7 @@ static bool setup_stack (struct process_info *process, void **esp)
               }
               arg_addrs[i] = *esp;
               memcpy (*esp, argv[i], strlen (argv[i]) + 1);
-              // printf("arg_addrs[%d]: %p\n", i, arg_addrs[i]);
+              printf("arg_addrs[%d]: %p\n", i, arg_addrs[i]);
             }
 
           // Word align the stack pointer
@@ -575,7 +583,7 @@ static bool setup_stack (struct process_info *process, void **esp)
           }
           memset (*esp, 0, sizeof (void *));
 
-          hex_dump(*esp, *esp, (char*)PHYS_BASE - (char*)*esp, true);
+          // hex_dump(*esp, *esp, (char*)PHYS_BASE - (char*)*esp, true);
           // printf("stack pointer ends at: %p\n", *esp);
         }
 
