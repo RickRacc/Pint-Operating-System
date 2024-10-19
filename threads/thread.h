@@ -21,7 +21,6 @@ typedef int tid_t;
 #define TID_ERROR ((tid_t) -1) /* Error value for tid_t. */
 
 #ifdef USERPROG
-#define EXIT_INIT 0
 #define EXIT_ERROR -1
 
 #define EXEC_INIT 0
@@ -116,7 +115,10 @@ struct thread
   struct list_elem childelem;
   bool wait_called;
   int exit_status;
+  bool exited;
   struct semaphore wait;
+  struct semaphore exec;
+  struct semaphore exit;
   
   int exec_status;
   struct lock lock;

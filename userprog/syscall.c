@@ -150,6 +150,9 @@ void exit (int status)
   struct thread *current_thread = thread_current ();
   current_thread->exit_status = status;
   printf("%s: exit(%d)\n", current_thread->name, status);
+  // Exit status is now saved in this thread, if the parent process that is waiting
+  // it can collect the exit status
+  sema_up(&current_thread->wait);
   thread_exit ();
 }
 
@@ -163,17 +166,14 @@ pid_t exec (const char *cmd_line)
   }
 
   current_thread = thread_current ();
+  // Must wait for the thread to be created and loaded
   return_tid = process_execute (cmd_line);
-  lock_acquire (&current_thread->lock);
-  while (current_thread->exec_status == EXEC_INIT)
-    {
-      cond_wait (&current_thread->condition, &current_thread->lock);
-    }
+  sema_down(&current_thread->exec);
+
   if (current_thread->exec_status == EXEC_ERROR)
     {
       return_tid = -1;
     }
-  lock_release (&current_thread->lock);
   return return_tid;
 }
 

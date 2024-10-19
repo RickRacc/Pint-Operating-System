@@ -267,23 +267,43 @@ void thread_exit (void)
 {
   ASSERT (!intr_context ());
 
+  struct thread *current_thread = thread_current();
+
+  current_thread->exited = true;
+
+  
+  // We want to deallocate this thread's resources now, make sure that
+  // if the parent is waiting it has already saved the exit status
+  if (current_thread->parent != NULL) {
+    sema_down(&current_thread->exit);
+    current_thread->parent = NULL;
+    list_remove(&current_thread->childelem);
+  }
+
+
+  // For each of this thread's children, orphan them if they haven't exited already
+  lock_acquire(&current_thread->lock);
+  for (struct list_elem *e = list_begin(&current_thread->children); e != list_end(&current_thread->children); e = list_next(e)) {
+    struct thread *child_thread = list_entry(e, struct thread, childelem);
+    child_thread->parent = NULL;
+    list_remove(e);
+  }
+  lock_release(&current_thread->lock);
+
 #ifdef USERPROG
   process_exit ();
 #endif
 
-  struct thread *current_thread = thread_current();
+
+  
+
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&current_thread->allelem);
   current_thread->status = THREAD_DYING;
-  // For each of this thread's children, remove them if they haven't exited already
-  for (struct list_elem *e = list_begin(&current_thread->children); e != list_end(&current_thread->children); e = list_next(e)) {
-    if (list_entry(e, struct thread, childelem)->status != THREAD_DYING) {
-      list_remove(e);
-    }
-  }
+  
   sema_up (&current_thread->wait);
   schedule ();
   NOT_REACHED ();
@@ -441,9 +461,11 @@ static void init_thread (struct thread *t, const char *name, int priority,
   t->parent = parent;
   list_init (&t->children);
   t->wait_called = false;
-  t->exit_status = EXIT_INIT;
+  t->exited = false;
   t->exec_status = EXEC_INIT;
   sema_init (&t->wait, 0);
+  sema_init (&t->exec, 0);
+  sema_init (&t->exit, 0);
   lock_init (&t->lock);
   cond_init (&t->condition);
   list_push_back(&parent->children, &t->childelem);
@@ -566,11 +588,8 @@ struct thread *get_thread_from_list (tid_t thread_id)
   struct list_elem *thread_elem = list_begin (&all_list);
   while (thread_elem != NULL)
     {
-      struct thread *current_thread =
-          list_entry (thread_elem, struct thread, allelem);
-      // Make sure the target thread isn't about to be destroyed
-      if (current_thread->tid == thread_id &&
-          current_thread->status != THREAD_DYING)
+      struct thread *current_thread = list_entry (thread_elem, struct thread, allelem);
+      if (current_thread->tid == thread_id)
         {
           return current_thread;
         }

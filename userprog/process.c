@@ -73,8 +73,16 @@ tid_t process_execute (const char *command)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (process->file_name, PRI_DEFAULT, start_process, process);
-  if (tid == TID_ERROR)
+  struct thread *current_thread = thread_current();
+  struct thread *new_thread = get_thread_from_list(tid);
+
+  if (tid == TID_ERROR) {
+    sema_up(&current_thread->exec);
     palloc_free_page (cmd_copy);
+  } else {
+    new_thread->parent = current_thread;
+    sema_up(&current_thread->exec);
+  }
   
   return tid;
 }
@@ -86,6 +94,8 @@ static void start_process (void *process_)
   struct process_info *process = process_;
   struct intr_frame if_;
   bool success;
+
+  struct thread *current_thread = thread_current();
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -104,8 +114,13 @@ static void start_process (void *process_)
   palloc_free_page (process);
 
   /* If load failed, quit. */
-  if (!success)
+  if (!success) {
+    current_thread->exec_status = EXEC_ERROR;
+    sema_up(&current_thread->exec);
     thread_exit ();
+  }
+  // We know the executable was loaded successfully
+  current_thread->exec_status = EXEC_SUCCESS;
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -143,7 +158,7 @@ int process_wait (tid_t child_tid)
       // printf(child_thread->wait_called ? "child_thread has already been waited\n" : "");
       // printf(child_thread->exit_status == EXIT_ERROR ? "child_thread was killed by the kernel due to an exception\n" : "");
       return -1;
-    } else if (child_thread->exit_status != EXIT_INIT) {
+    } else if (child_thread->exited) {
       return child_thread->exit_status;
     }
 
@@ -154,7 +169,8 @@ int process_wait (tid_t child_tid)
     sema_down(&child_thread->wait);
     // printf("child thread has died\n");
     int exit_status = child_thread->exit_status;
-    // printf("exit_status: %d\n", exit_status);
+    // We can deallocate the child process's resources now that we have its exit status
+    sema_up(&child_thread->exit);
     return exit_status;
   }
 }
@@ -164,6 +180,7 @@ void process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
