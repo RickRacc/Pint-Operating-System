@@ -585,16 +585,13 @@ static tid_t allocate_tid (void)
 struct thread *get_thread_from_list (tid_t thread_id)
 {
   ASSERT (thread_id != TID_ERROR);
-  struct list_elem *thread_elem = list_begin (&all_list);
-  while (thread_elem != NULL)
-    {
-      struct thread *current_thread = list_entry (thread_elem, struct thread, allelem);
-      if (current_thread->tid == thread_id)
-        {
-          return current_thread;
-        }
-      thread_elem = list_next (thread_elem);
+
+  for (struct list_elem *e = list_begin (&all_list); e != list_end(&all_list); e = list_next(e)) {
+    struct thread *current_thread = list_entry (e, struct thread, allelem);
+    if (current_thread->tid == thread_id && !current_thread->exited) {
+      return current_thread;
     }
+  }
   return NULL;
 }
 
