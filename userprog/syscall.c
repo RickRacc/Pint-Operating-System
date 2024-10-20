@@ -33,7 +33,7 @@ static uint32_t *esp;
 
 static void syscall_handler (struct intr_frame *);
 
-static void check_stack_pointer_validity (int num_args);
+//static void check_stack_pointer_validity (int num_args);
 
 // not sure why this is saying syntax_error
 static struct open_file *add_open_file (struct file *file_struct,
@@ -49,18 +49,18 @@ void syscall_init (void)
 }
 
 // Yiming driving
-static void check_stack_pointer_validity (int num_args)
-{
-  // check if the arguments passed to the syscall are at valid user addresses
-  for (int i = 0; i < num_args; i++)
-    {
-      if (!is_valid_user_pointer (esp + i + 1))
-        {
-          // printf("invalid stack pointer\n");
-          exit (EXIT_ERROR);
-        }
-    }
-}
+// static void check_stack_pointer_validity (int num_args)
+// {
+//   // check if the arguments passed to the syscall are at valid user addresses
+//   for (int i = 0; i < num_args; i++)
+//     {
+//       if (!is_valid_user_pointer (esp + i + 1))
+//         {
+//           // printf("invalid stack pointer\n");
+//           exit (EXIT_ERROR);
+//         }
+//     }
+// }
 
 // Yiming driving
 static void syscall_handler (struct intr_frame *f UNUSED)
@@ -69,10 +69,11 @@ static void syscall_handler (struct intr_frame *f UNUSED)
   esp = f->esp;
 
   // check if stack pointer is valid and pointing to the syscall number
-  if (!is_valid_user_pointer (esp))
-    {
-      exit (EXIT_ERROR);
-    }
+  if (!is_valid_user_pointer(esp) || !is_valid_user_pointer(esp + 1) ||
+      !is_valid_user_pointer(esp + 2) || !is_valid_user_pointer(esp + 3)) {
+    exit (-1);
+  }
+
 
   int syscall_num = *esp;
   // printf("syscall_num: %d\n", syscall_num);
@@ -83,57 +84,57 @@ static void syscall_handler (struct intr_frame *f UNUSED)
         halt ();
         break;
       case SYS_EXIT:
-        check_stack_pointer_validity (1);
+        //check_stack_pointer_validity (1);
         exit (*(esp + 1));
         break;
       case SYS_EXEC:
-        check_stack_pointer_validity (1);
+        //check_stack_pointer_validity (1);
         f->eax = exec ((char *) *(esp + 1));
         break;
       case SYS_WAIT:
-        check_stack_pointer_validity (1);
+        //check_stack_pointer_validity (1);
         f->eax = wait (*(esp + 1));
         break;
       // Not implemented yet
       case SYS_CREATE:
-        check_stack_pointer_validity (2);
+        //check_stack_pointer_validity (2);
         f->eax = create ((char *) *(esp + 1), *(esp + 2));
         break;
       case SYS_REMOVE:
-        check_stack_pointer_validity (1);
+        //check_stack_pointer_validity (1);
         f->eax = remove ((char *) *(esp + 1));
         break;
       case SYS_OPEN:
-        check_stack_pointer_validity (1);
+        //check_stack_pointer_validity (1);
         f->eax = open ((char *) *(esp + 1));
         break;
       case SYS_FILESIZE:
-        check_stack_pointer_validity (1);
+        //check_stack_pointer_validity (1);
         f->eax = filesize (*(esp + 1));
         break;
 
       case SYS_READ:
-        check_stack_pointer_validity (3);
+        //check_stack_pointer_validity (3);
         f->eax = read (*(esp + 1), (void *) *(esp + 2), *(esp + 3));
         break;
         
       case SYS_WRITE:
-        check_stack_pointer_validity (3);
+        //check_stack_pointer_validity (3);
         f->eax = write (*(esp + 1), (void *) *(esp + 2), *(esp + 3));
         break;
 
       case SYS_SEEK:
-        check_stack_pointer_validity (2);
+        //check_stack_pointer_validity (2);
         seek (*(esp + 1), *(esp + 2));
         break;
 
       case SYS_TELL:
-        check_stack_pointer_validity (1);
+        //check_stack_pointer_validity (1);
         f->eax = tell (*(esp + 1));
         break;
 
       case SYS_CLOSE:
-        check_stack_pointer_validity (1);
+        //check_stack_pointer_validity (1);
         close(*(esp + 1));
         break;
 
@@ -162,18 +163,23 @@ pid_t exec (const char *cmd_line)
   tid_t return_tid;
 
   if (!is_valid_user_pointer(cmd_line)) {
-    exit(EXIT_ERROR);
+    exit(EXIT_ERROR);  
   }
+  
 
   current_thread = thread_current ();
   // Must wait for the thread to be created and loaded
   return_tid = process_execute (cmd_line);
+  if (return_tid == TID_ERROR) {
+    return -1;
+  }
+
   sema_down(&current_thread->exec);
 
-  if (current_thread->exec_status == EXEC_ERROR)
-    {
-      return_tid = -1;
-    }
+  if (current_thread->exec_status == EXEC_ERROR){
+    return_tid = -1;
+  }
+
   return return_tid;
 }
 
@@ -255,10 +261,9 @@ int filesize (int fd) {
 
 // RAKESH DRIVING
 int read (int fd, void *buffer, unsigned size) {
-  if (!is_valid_user_pointer(buffer)) {
-    exit(EXIT_ERROR);
-  }
+  
 
+  lock_acquire(&filesys_lock);
   // read from the keyboard if standard input
   if (fd == STDIN_FILENO) {
     unsigned i;
@@ -266,11 +271,15 @@ int read (int fd, void *buffer, unsigned size) {
     for (i = 0; i < size; i++) {
       *((uint8_t *)buffer + i) = input_getc();
     }
+    lock_release(&filesys_lock);
     return size;  
   }
 
+  if (!is_valid_user_pointer(buffer)) {
+    exit(EXIT_ERROR);
+  }
+
   int bytes_read = -1;
-  lock_acquire(&filesys_lock);
   struct open_file *of = get_open_file(fd);
   if (of) {
     // read from the file
@@ -287,18 +296,17 @@ int write (int fd, const void *buffer, unsigned size)
     exit(EXIT_ERROR);
   }
 
-  lock_acquire (&filesys_lock);
-
   int bytes_written = 0;
 
+  lock_acquire (&filesys_lock);
   if (fd == STDOUT_FILENO)
     {                                  // fd == 1
-      const unsigned CHUNK_SIZE = 256; // chunk size
+      const unsigned CHUNK = 256; // chunk size
 
       // Split large buffers into chunks to prevent interleaving.
       while (size > 0)
         {
-          unsigned chunk = size < CHUNK_SIZE ? size : CHUNK_SIZE;
+          unsigned chunk = size < CHUNK ? size : CHUNK;
           putbuf ((const char *) buffer + bytes_written, chunk);
           bytes_written += chunk;
           size -= chunk;
@@ -335,7 +343,7 @@ unsigned tell (int fd) {
 // RAKESH DRIVING
 void close (int fd) {
   lock_acquire (&filesys_lock);
-  remove_open_file(*(esp + 1));
+  remove_open_file(fd);
   lock_release (&filesys_lock);
 }
 

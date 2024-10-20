@@ -71,6 +71,17 @@ tid_t process_execute (const char *command)
   process->argc = i;
   process->argv = tokenized_cmd;
 
+
+  struct file *file = filesys_open(process->file_name);
+  if (file == NULL)
+  {
+    palloc_free_page (cmd_copy);  
+    palloc_free_page (process);   
+    return TID_ERROR;  
+  }
+  
+  file_deny_write(file);
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (process->file_name, PRI_DEFAULT, start_process, process);
   struct thread *current_thread = thread_current();
@@ -78,6 +89,8 @@ tid_t process_execute (const char *command)
 
   if (tid == TID_ERROR) {
     sema_up(&current_thread->exec);
+    file_allow_write(file);
+    file_close(file);
     palloc_free_page (cmd_copy);
   } else {
     new_thread->parent = current_thread;
@@ -151,16 +164,16 @@ int process_wait (tid_t child_tid)
     struct thread *child_thread = get_thread_from_list(child_tid);
     // Cases where TID is invalid, is not a child of the current thread, has already been waited,
     // or was killed by the kernel due to an exception
-    if (child_thread == NULL || child_thread->parent != current_thread || child_thread->wait_called || 
-        child_thread->exit_status == EXIT_ERROR) {
+    if (child_thread == NULL || child_thread->parent != current_thread || child_thread->wait_called) {
       // printf(child_thread == NULL ? "child_thread is NULL\n" : "");
       // printf(child_thread->parent != current_thread ? "child_thread is not a child of the current thread\n" : "");
       // printf(child_thread->wait_called ? "child_thread has already been waited\n" : "");
       // printf(child_thread->exit_status == EXIT_ERROR ? "child_thread was killed by the kernel due to an exception\n" : "");
       return -1;
-    } else if (child_thread->exited) {
-      return child_thread->exit_status;
     }
+     if (child_thread->exited) {
+      return child_thread->exit_status;
+    } 
 
     // Wait for thread tid to die
     // printf("waiting for child thread to die\n");
@@ -181,6 +194,9 @@ void process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  //sema_up(&cur->wait);
+  //cur->exited = true;
+  
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -198,6 +214,7 @@ void process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  //sema_down(&cur->exit);
 }
 
 /* Sets up the CPU for running user code in the current
