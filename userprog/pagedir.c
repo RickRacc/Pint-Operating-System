@@ -261,5 +261,6 @@ bool is_valid_user_pointer (const void *vaddr)
     {
       return false;
     }
+  
   return true;
 }

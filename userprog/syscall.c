@@ -162,11 +162,18 @@ pid_t exec (const char *cmd_line)
   struct thread *current_thread;
   tid_t return_tid;
 
+  
   if (!is_valid_user_pointer(cmd_line)) {
     exit(EXIT_ERROR);  
   }
   
+  // for (const char *ptr = cmd_line; *ptr != '\0'; ptr++) {
+  //   if (!is_valid_user_pointer(ptr)) {
+  //     exit(EXIT_ERROR);  // Terminate if any part of the string is invalid
+  //   }
+  // }
 
+  
   current_thread = thread_current ();
   // Must wait for the thread to be created and loaded
   return_tid = process_execute (cmd_line);
@@ -179,7 +186,6 @@ pid_t exec (const char *cmd_line)
   if (current_thread->exec_status == EXEC_ERROR){
     return_tid = -1;
   }
-
   return return_tid;
 }
 
@@ -332,12 +338,17 @@ int write (int fd, const void *buffer, unsigned size)
 // Annabel driving
 void seek(int fd, unsigned position) {
   struct open_file *of = get_open_file (fd);
-  of->file_struct->pos = position;
+  if (of) {
+    file_seek (of->file_struct, position);
+  }
 }
 
 unsigned tell (int fd) {
   struct open_file *of = get_open_file (fd);
-  return of->file_struct->pos;
+  if (of == NULL) {
+    exit(EXIT_ERROR);
+  }
+  return file_tell(of->file_struct);
 }
 
 // RAKESH DRIVING
@@ -389,11 +400,12 @@ static struct open_file *get_open_file (int fd_num)
 static void remove_open_file (int fd_num)
 {
   struct list_elem *e;
+  struct thread *current_thread = thread_current();
   for (e = list_begin (&open_files); e != list_end (&open_files);
        e = list_next (e))
     {
       struct open_file *open_file = list_entry (e, struct open_file, elem);
-      if (open_file->fd_num == fd_num)
+      if (open_file->fd_num == fd_num && open_file->owner == current_thread)
         {
           list_remove (e); // Remove from the open_files list.
           file_close (open_file->file_struct); // Close the file.

@@ -45,13 +45,19 @@ tid_t process_execute (const char *command)
    Also, strtok_r is modifying the string it processes, so
    making a copy of the original command string is preferrable. */
   cmd_copy = palloc_get_page (0);
-  if (cmd_copy == NULL)
+  if (cmd_copy == NULL) {
+    palloc_free_page(cmd_copy);
     return TID_ERROR;
+  }
   strlcpy (cmd_copy, command, PGSIZE);
 
   // Yiming driving
   char *token, *save_ptr;
   char **tokenized_cmd = palloc_get_page (0);
+  if (tokenized_cmd == NULL) {
+    palloc_free_page(cmd_copy);  
+    return TID_ERROR;          
+}
   int i = 0;
   // string tokenization
   for (token = strtok_r (cmd_copy, " ", &save_ptr); token != NULL;
@@ -64,8 +70,11 @@ tid_t process_execute (const char *command)
 
   // build the process_info struct
   struct process_info *process = palloc_get_page (0);
-  if (process == NULL)
+  if (process == NULL) {
+    palloc_free_page(cmd_copy);
     return TID_ERROR;
+  }
+    
 
   process->file_name = tokenized_cmd[0];
   process->argc = i;
@@ -89,10 +98,11 @@ tid_t process_execute (const char *command)
 
   if (tid == TID_ERROR) {
     sema_up(&current_thread->exec);
-    file_allow_write(file);
-    file_close(file);
+    //file_allow_write(file);
+    //file_close(file);
     palloc_free_page (cmd_copy);
   } else {
+    new_thread->executable_file = file;
     new_thread->parent = current_thread;
     sema_up(&current_thread->exec);
   }
@@ -194,8 +204,17 @@ void process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  //  while (!list_empty (&cur->wait.waiters))
+  //    sema_up (&cur->wait);
+  
   //sema_up(&cur->wait);
+  //file_close(cur->executable_file);
+  //cur->executable_file = NULL;
   //cur->exited = true;
+  if (cur->executable_file != NULL) {
+    file_allow_write(cur->executable_file);
+    file_close(cur->executable_file);        
+  }
   
 
   /* Destroy the current process's page directory and switch back
@@ -336,6 +355,8 @@ bool load (struct process_info *process, void (**eip) (void),
       goto done;
     }
   // printf("argv[0] 2: %s\n", process->argv[0]);
+  //t->executable_file = file;
+  //file_deny_write (file);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr ||
