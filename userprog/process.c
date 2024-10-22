@@ -87,15 +87,24 @@ tid_t process_execute (const char *command)
   if (file == NULL)
   {
     palloc_free_page (cmd_copy);  
-    palloc_free_page (process);   
+    palloc_free_page (process); 
+    palloc_free_page (tokenized_cmd);  
     return TID_ERROR;  
   }
   
   file_deny_write(file);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (process->file_name, PRI_DEFAULT, start_process, process);
   struct thread *current_thread = thread_current();
+  
+  tid = thread_create (process->file_name, PRI_DEFAULT, start_process, process);
+  if (tid == TID_ERROR) {
+    sema_up(&current_thread->exec);
+    palloc_free_page (cmd_copy);
+    palloc_free_page (process);
+    palloc_free_page (tokenized_cmd);
+    return TID_ERROR;
+  }
   struct thread *new_thread = get_thread_from_list(tid);
 
   if (tid == TID_ERROR) {
@@ -103,6 +112,8 @@ tid_t process_execute (const char *command)
     //file_allow_write(file);
     //file_close(file);
     palloc_free_page (cmd_copy);
+    palloc_free_page (process);
+    palloc_free_page (tokenized_cmd);
   } else {
     new_thread->executable_file = file;
     new_thread->parent = current_thread;
@@ -128,11 +139,11 @@ static void start_process (void *process_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
-  struct process_info *process_copy = palloc_get_page (0);
-  if (process_copy == NULL)
-    thread_exit ();
-  memcpy (process_copy, process, sizeof (struct process_info));
-  success = load (process_copy, &if_.eip, &if_.esp);
+  // struct process_info *process_copy = palloc_get_page (0);
+  // if (process_copy == NULL)
+  //   thread_exit ();
+  // memcpy (process_copy, process, sizeof (struct process_info));
+  success = load (process, &if_.eip, &if_.esp);
 
   // Yiming driving
   // Freeing the process_info struct after loading the process
