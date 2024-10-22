@@ -36,7 +36,7 @@ static bool load (struct process_info *process, void (**eip) (void),
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t process_execute (const char *command)
 {
-  
+
   char *cmd_copy;
   tid_t tid;
 
@@ -54,10 +54,11 @@ tid_t process_execute (const char *command)
   // Yiming driving
   char *token, *save_ptr;
   char **tokenized_cmd = palloc_get_page (0);
-  if (tokenized_cmd == NULL) {
-    palloc_free_page(cmd_copy);  
-    return TID_ERROR;          
-}
+  if (tokenized_cmd == NULL)
+    {
+      palloc_free_page (cmd_copy);
+      return TID_ERROR;
+    }
   int i = 0;
   // string tokenization
   for (token = strtok_r (cmd_copy, " ", &save_ptr); token != NULL;
@@ -67,6 +68,7 @@ tid_t process_execute (const char *command)
       tokenized_cmd[i] = token;
       i++;
     }
+
 
   // build the process_info struct
   struct process_info *process = palloc_get_page (0);

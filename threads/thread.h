@@ -124,6 +124,8 @@ struct thread
   struct lock lock;
   struct condition condition;
 
+  struct file *executable_file;
+
 #endif
 
 

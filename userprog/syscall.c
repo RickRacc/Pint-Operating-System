@@ -166,6 +166,17 @@ pid_t exec (const char *cmd_line)
   if (!is_valid_user_pointer(cmd_line)) {
     exit(EXIT_ERROR);  
   }
+
+  // check if the command line string extends to an invalid address
+  char *c = cmd_line;
+  while (*c != '\0')
+    {
+      c++;
+      if (!is_valid_user_pointer (c))
+        {
+          exit(EXIT_ERROR);
+        }
+    }
   
   // for (const char *ptr = cmd_line; *ptr != '\0'; ptr++) {
   //   if (!is_valid_user_pointer(ptr)) {
