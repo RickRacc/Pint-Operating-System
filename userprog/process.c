@@ -46,7 +46,6 @@ tid_t process_execute (const char *command)
    making a copy of the original command string is preferrable. */
   cmd_copy = palloc_get_page (0);
   if (cmd_copy == NULL) {
-    palloc_free_page(cmd_copy);
     return TID_ERROR;
   }
   strlcpy (cmd_copy, command, PGSIZE);
@@ -83,41 +82,45 @@ tid_t process_execute (const char *command)
   process->argv = tokenized_cmd;
 
 
-  struct file *file = filesys_open(process->file_name);
-  if (file == NULL)
-  {
-    palloc_free_page (cmd_copy);  
-    palloc_free_page (process); 
-    palloc_free_page (tokenized_cmd);  
-    return TID_ERROR;  
-  }
+  // printf("process->file_name: %s\n", process->file_name);
+  // struct file *file = filesys_open(process->file_name);
+  // if (file == NULL)
+  // {
+  //   printf("file is NULL\n");
+  //   palloc_free_page (cmd_copy);  
+  //   palloc_free_page (process); 
+  //   palloc_free_page (tokenized_cmd);  
+  //   return TID_ERROR;  
+  // }
   
-  file_deny_write(file);
+  // file_deny_write(file);
 
   /* Create a new thread to execute FILE_NAME. */
   struct thread *current_thread = thread_current();
   
   tid = thread_create (process->file_name, PRI_DEFAULT, start_process, process);
   if (tid == TID_ERROR) {
-    sema_up(&current_thread->exec);
+    // file_close(file);
     palloc_free_page (cmd_copy);
     palloc_free_page (process);
     palloc_free_page (tokenized_cmd);
     return TID_ERROR;
-  }
+  } 
+
   struct thread *new_thread = get_thread_from_list(tid);
 
-  if (tid == TID_ERROR) {
-    sema_up(&current_thread->exec);
+  if (new_thread == NULL) {
+    // file_close(file);
     //file_allow_write(file);
     //file_close(file);
     palloc_free_page (cmd_copy);
     palloc_free_page (process);
     palloc_free_page (tokenized_cmd);
+    return TID_ERROR;
   } else {
-    new_thread->executable_file = file;
+    // new_thread->executable_file = file;
     new_thread->parent = current_thread;
-    sema_up(&current_thread->exec);
+    sema_down(&current_thread->exec);
   }
   
   return tid;
@@ -152,11 +155,12 @@ static void start_process (void *process_)
   /* If load failed, quit. */
   if (!success) {
     current_thread->exec_status = EXEC_ERROR;
-    sema_up(&current_thread->exec);
+    sema_up(&current_thread->parent->exec);
     thread_exit ();
   }
   // We know the executable was loaded successfully
   current_thread->exec_status = EXEC_SUCCESS;
+  sema_up(&current_thread->parent->exec);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -181,21 +185,23 @@ int process_wait (tid_t child_tid)
 {
   // Annabel driving
   if (child_tid == TID_ERROR) {
+    printf("child_tid is TID_ERROR\n");
     return -1;
   } else {
     struct thread *current_thread = thread_current();
     struct thread *child_thread = get_thread_from_list(child_tid);
+    // printf("parent thread name: %s waiting for child thread name: %s\n", current_thread->name, child_thread->name);
     // Cases where TID is invalid, is not a child of the current thread, has already been waited,
     // or was killed by the kernel due to an exception
     if (child_thread == NULL || child_thread->parent != current_thread || child_thread->wait_called) {
-      // printf(child_thread == NULL ? "child_thread is NULL\n" : "");
-      // printf(child_thread->parent != current_thread ? "child_thread is not a child of the current thread\n" : "");
-      // printf(child_thread->wait_called ? "child_thread has already been waited\n" : "");
-      // printf(child_thread->exit_status == EXIT_ERROR ? "child_thread was killed by the kernel due to an exception\n" : "");
+      printf(child_thread == NULL ? "child_thread is NULL\n" : "");
+      printf(child_thread->parent != current_thread ? "child_thread is not a child of the current thread\n" : "");
+      printf(child_thread->wait_called ? "child_thread has already been waited\n" : "");
+      printf(child_thread->exit_status == EXIT_ERROR ? "child_thread was killed by the kernel due to an exception\n" : "");
       return -1;
-    }
-     if (child_thread->exited) {
+    if (child_thread->exited) {
       return child_thread->exit_status;
+     }
     } 
 
     // Wait for thread tid to die
@@ -368,8 +374,8 @@ bool load (struct process_info *process, void (**eip) (void),
       goto done;
     }
   // printf("argv[0] 2: %s\n", process->argv[0]);
-  //t->executable_file = file;
-  //file_deny_write (file);
+  t->executable_file = file;
+  file_deny_write (file);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr ||

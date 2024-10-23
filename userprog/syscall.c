@@ -178,12 +178,6 @@ pid_t exec (const char *cmd_line)
         }
     }
   
-  // for (const char *ptr = cmd_line; *ptr != '\0'; ptr++) {
-  //   if (!is_valid_user_pointer(ptr)) {
-  //     exit(EXIT_ERROR);  // Terminate if any part of the string is invalid
-  //   }
-  // }
-
   
   current_thread = thread_current ();
   // Must wait for the thread to be created and loaded
@@ -192,15 +186,16 @@ pid_t exec (const char *cmd_line)
     return -1;
   }
 
-  sema_down(&current_thread->exec);
-
-  if (current_thread->exec_status == EXEC_ERROR){
-    return_tid = -1;
-  }
+  // if (current_thread->exec_status == EXEC_ERROR){
+  //   return_tid = -1;
+  // }
+  // printf("exec called, return_tid: %d\n", return_tid);
   return return_tid;
 }
 
-int wait (pid_t pid) { return process_wait (pid); }
+int wait (pid_t pid) { 
+  // printf("wait called, pid: %d\n", pid);
+  return process_wait (pid); }
 
 // Yiming driving
 bool create (const char *file, unsigned initial_size)
@@ -239,6 +234,7 @@ int open (const char *file)
 
   lock_acquire (&filesys_lock);
   file_struct = filesys_open (file);
+  printf("open syscall with file name: %s\n", file);
   // If file opening fails, return -1
   if (file_struct == NULL)
     {
@@ -278,7 +274,6 @@ int filesize (int fd) {
 
 // RAKESH DRIVING
 int read (int fd, void *buffer, unsigned size) {
-  
 
   lock_acquire(&filesys_lock);
   // read from the keyboard if standard input
@@ -301,6 +296,7 @@ int read (int fd, void *buffer, unsigned size) {
   if (of) {
     // read from the file
     bytes_read = file_read(of->file_struct, buffer, size);
+    // printf("thread name: %s, bytes_read: %d\n", thread_current()->name, bytes_read);
   }
   lock_release(&filesys_lock);
   return bytes_read;
@@ -309,6 +305,7 @@ int read (int fd, void *buffer, unsigned size) {
 // RAKESH DRIVING
 int write (int fd, const void *buffer, unsigned size)
 {
+  // printf("write syscall, buffer: %p, size: %d\n", buffer, size);
   if (!is_valid_user_pointer(buffer)) {
     exit(EXIT_ERROR);
   }
@@ -394,12 +391,14 @@ static struct open_file *add_open_file (struct file *file_struct,
 static struct open_file *get_open_file (int fd_num)
 {
   struct list_elem *e;
+  // printf("getting open file, fd_num: %d\n", fd_num);
   for (e = list_begin (&open_files); e != list_end (&open_files);
        e = list_next (e))
     {
       struct open_file *open_file = list_entry (e, struct open_file, elem);
       if (open_file->fd_num == fd_num)
         {
+          // printf("found open file with fd: %d\n", open_file->fd_num);
           return open_file; // Return the matching open_file.
         }
     }
