@@ -1,4 +1,5 @@
 # -*- makefile -*-
+SIMULATOR = --bochs
 
 include $(patsubst %,$(SRCDIR)/%/Make.tests,$(TEST_SUBDIRS))
 
